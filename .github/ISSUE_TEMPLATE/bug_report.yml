@@ -60,7 +60,7 @@ body:
     attributes:
       label: DataMendrix version
       description: Run `python -c "import data_mendrix; print(data_mendrix.__version__)"`.
-      placeholder: 0.1.0
+      placeholder: 0.2.0
     validations:
       required: true
 

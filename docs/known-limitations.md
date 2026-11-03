@@ -1,8 +1,9 @@
 # Known limitations
 
 This document describes intentional boundaries of the current DataMendrix
-foundation (`0.1.x`). They are not promises that the software will remain
-limited in these ways; they clarify what is and is not validated today.
+foundation and detection engine (`0.2.x`). They are not promises that the
+software will remain limited in these ways; they clarify what is and is not
+validated today.
 
 ## Scope and maturity
 
@@ -51,6 +52,8 @@ limited in these ways; they clarify what is and is not validated today.
   or blank column labels, optional unnamed columns and required column names.
 - It does not validate data types, ranges, uniqueness constraints, referential
   integrity, outliers, semantic rules, PII or target leakage.
+- Statistical checks are separate read-only detection APIs. They produce
+  evidence for review; they do not validate, repair or reject a dataset.
 - The loader does not validate automatically. This is intentional so imperfect
   datasets can be loaded and audited without being rejected.
 - `ValidationConfig` requires caller-supplied rules; it is not a schema
@@ -67,8 +70,8 @@ limited in these ways; they clarify what is and is not validated today.
   example, standard deviation needs two values, skewness needs three and
   kurtosis needs four.
 - Standard deviation is the sample standard deviation (`ddof=1`).
-- There is no outlier detection, robust statistics, distribution testing or
-  automatic type coercion.
+- There is no distribution testing, automatic type coercion or multivariate
+  anomaly detection.
 - Memory usage is pandas' deep memory estimate and includes the index. It is
   useful for comparison but is not an operating-system measurement.
 - Profiles are point-in-time snapshots. They do not update when external data
@@ -78,6 +81,46 @@ limited in these ways; they clarify what is and is not validated today.
 - The unique-count fallback for unhashable object cells uses pairwise equality
   and is quadratic. It is intended only for unusual, typically small in-memory
   columns.
+
+## Detection engine
+
+- Outlier detection is univariate and applies to real-valued numeric columns
+  only. Boolean, complex, datetime, timedelta and non-numeric object columns are
+  excluded by default; explicitly selecting a non-numeric column raises
+  `InvalidParameterError`.
+- There is no multivariate, contextual, time-series or model-based anomaly
+  detection. Correlations and row-level combinations are not considered.
+- Missing values are excluded from outlier baselines and evidence. Infinite
+  values are always flagged as outliers and excluded from the finite baseline.
+  If a column has no finite values, its bounds are `NaN` while infinities remain
+  flagged.
+- IQR uses linear quartiles. If the interquartile range is zero, any finite value
+  outside the identical quartile bounds is flagged with an infinite score.
+- Z-score uses the sample standard deviation (`ddof=1`) and needs at least two
+  finite observations. With fewer observations, no finite Z-score outlier is
+  reported.
+- Modified Z-score uses an unscaled MAD and the conventional `0.6745`
+  multiplier. If MAD is zero, finite values different from the median are
+  flagged with an infinite score.
+- Thresholds are configurable statistical heuristics. Outliers are review
+  candidates, not automatically invalid values, and the library does not remove
+  or replace them.
+- Constant-feature detection excludes missing values from the dominance
+  denominator. A column with no non-missing values is neither constant nor
+  near-constant. Exact constants are also included in the near-constant
+  collection.
+- Constant-feature detection and class-imbalance analysis rely on pandas value
+  counting, so unhashable object cells or class labels such as lists are not
+  supported.
+- Class-imbalance analysis requires an explicit, unique target column. Missing
+  target values are excluded from counts, percentages and ratios, and are
+  reported separately.
+- Imbalance thresholds are caller-configured heuristics. At least two observed
+  classes are required; a one-class target is not labelled imbalanced. A ratio
+  equal to the ratio threshold and a minority fraction equal to the fraction
+  threshold do not trigger detection.
+- The detection engine does not drop constant features, remove outliers,
+  resample classes, create train/test splits or generate repaired datasets.
 
 ## Dataset isolation
 

@@ -10,16 +10,11 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Iterable
 from dataclasses import dataclass
-from typing import Literal, cast
-
-import pandas as pd
+from typing import Literal
 
 from data_mendrix.core.dataset import Dataset
-from data_mendrix.core.exceptions import (
-    ColumnNotFoundError,
-    InvalidDatasetError,
-    InvalidParameterError,
-)
+from data_mendrix.core.exceptions import InvalidDatasetError, InvalidParameterError
+from data_mendrix.detection._columns import resolve_column_selection
 
 KeepPolicy = Literal["first", "last"]
 
@@ -112,7 +107,7 @@ def detect_duplicates(
         raise InvalidParameterError("keep must be either 'first' or 'last'.")
 
     frame = dataset._view()
-    columns = _resolve_subset(frame, subset)
+    columns = resolve_column_selection(frame, subset, parameter="subset")
     duplicate_mask = frame.duplicated(subset=columns, keep=keep)
     duplicate_row_count = int(duplicate_mask.sum())
 
@@ -134,44 +129,3 @@ def detect_duplicates(
         duplicate_group_count=duplicate_group_count,
         duplicate_indices=tuple(frame.index[duplicate_mask].tolist()),
     )
-
-
-def _resolve_subset(
-    frame: pd.DataFrame,
-    subset: Hashable | Iterable[Hashable] | None,
-) -> list[Hashable] | None:
-    """Normalise and validate a duplicate-detection column subset."""
-    if subset is None:
-        return None
-
-    if isinstance(subset, str) or not isinstance(subset, Iterable):
-        columns: list[Hashable] = [subset]
-    elif _is_existing_label(frame, subset):
-        # A tuple can be a single column label (for example with a MultiIndex)
-        # or an iterable of labels. Prefer the label interpretation when it
-        # actually identifies an existing column.
-        columns = [cast(Hashable, subset)]
-    else:
-        try:
-            columns = list(subset)
-        except TypeError as exc:
-            raise InvalidParameterError(
-                "subset must be a column label or an iterable of labels."
-            ) from exc
-
-    if not columns:
-        raise InvalidParameterError("subset must contain at least one column.")
-
-    missing = tuple(column for column in columns if column not in frame.columns)
-    if missing:
-        raise ColumnNotFoundError(missing)
-
-    return columns
-
-
-def _is_existing_label(frame: pd.DataFrame, label: object) -> bool:
-    """Return whether an object is a column label, tolerating unhashable input."""
-    try:
-        return label in frame.columns
-    except TypeError:
-        return False

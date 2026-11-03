@@ -3,11 +3,12 @@
 DataMendrix is an open-source Python toolkit for auditing, cleaning and preparing
 tabular datasets for machine learning.
 
-> **Status:** early-stage (`0.1.x`). This repository currently contains the
-> Python foundation: CSV loading, structural validation, missing-value
-> statistics, duplicate-row detection, numeric descriptive statistics and
-> combined profiling. The repair engine, reporting formats, HTTP API and
-> frontend are not implemented yet.
+> **Status:** early-stage (`0.2.x`). This repository contains the Python
+> foundation and detection engine: CSV loading, structural validation,
+> missing-value statistics, duplicate-row detection, numeric descriptive
+> statistics, combined profiling, univariate outlier detection, constant-feature
+> detection and class-imbalance analysis. The repair engine, reporting formats,
+> HTTP API and frontend are not implemented yet.
 
 ## Features
 
@@ -19,6 +20,12 @@ tabular datasets for machine learning.
 - Duplicate-row detection, including column subsets and first/last policies.
 - Descriptive statistics for real-valued numeric columns.
 - Combined, immutable dataset profiles.
+- Univariate outlier detection using IQR, Z-score or modified Z-score (MAD),
+  with affected row labels and per-value explanations.
+- Constant and near-constant feature detection with a configurable dominance
+  threshold.
+- Binary and multiclass target-imbalance analysis with counts, percentages and
+  configurable ratio/minority thresholds.
 - Typed public API, pytest suite and `pyproject.toml`-based packaging.
 - CI configured for Python 3.11 and 3.12.
 
@@ -65,7 +72,12 @@ python -m pip install .
 ## Quick start
 
 ```python
-from data_mendrix import load_csv, profile_dataset, validate_dataset
+from data_mendrix import (
+    detect_outliers,
+    load_csv,
+    profile_dataset,
+    validate_dataset,
+)
 
 dataset = load_csv("data/customers.csv", na_values=["N/A", "unknown"])
 
@@ -79,6 +91,10 @@ print(profile.row_count, profile.column_count)
 print(profile.missing.missing_cell_count)
 print(profile.duplicates.duplicate_row_count)
 print(profile.numeric.column_names)
+
+outliers = detect_outliers(dataset)
+for column in outliers.columns_with_outliers:
+    print(column.column, column.outlier_indices)
 ```
 
 ## API examples
@@ -158,6 +174,70 @@ print(key_duplicates.duplicate_indices)
 
 Duplicate detection only reports rows; it never removes them.
 
+### Detect numeric outliers
+
+```python
+from data_mendrix import detect_outliers
+
+report = detect_outliers(
+    dataset,
+    columns=["age", "income"],
+    method="modified_zscore",
+    threshold=3.5,
+)
+
+print(report.outlier_indices)
+for column in report.columns_with_outliers:
+    print(column.column, column.outlier_count)
+    for evidence in column.evidence:
+        print(evidence.row_index, evidence.value, evidence.reason)
+```
+
+The default method is `"iqr"`. Supported methods are `"iqr"`, `"zscore"` and
+`"modified_zscore"`. Default thresholds are `1.5`, `3.0` and `3.5`
+respectively. By default, all real-valued numeric columns are inspected; boolean
+and complex columns are excluded.
+
+### Detect constant and near-constant features
+
+```python
+from data_mendrix import detect_constant_features
+
+report = detect_constant_features(dataset, dominance_threshold=0.98)
+
+print(report.constant_column_names)
+print(report.near_constant_column_names)
+for column in report.near_constant_columns:
+    print(column.column, column.dominant_value, column.dominant_fraction)
+```
+
+A near-constant column has a dominant non-missing value covering at least the
+configured fraction of non-missing observations. Exact constant columns are
+included in the near-constant collection.
+
+### Analyse class imbalance
+
+```python
+from data_mendrix import analyze_class_imbalance
+
+report = analyze_class_imbalance(
+    dataset,
+    target="churn",
+    imbalance_ratio_threshold=2.0,
+    minority_fraction_threshold=0.1,
+)
+
+print(report.class_count, report.imbalance_ratio, report.is_imbalanced)
+for item in report.classes:
+    print(item.label, item.count, item.percentage)
+```
+
+The target column must be selected explicitly. Missing target values are
+excluded from class counts and percentages. The ratio condition uses
+`majority_count / minority_count`; multiclass targets compare the largest and
+smallest classes. See [docs/detection.md](docs/detection.md) for method formulas
+and threshold semantics.
+
 ### Missing values and numeric statistics
 
 ```python
@@ -196,6 +276,9 @@ print(profile_dataset(dataset).missing.missing_cell_count)
 | Loading | `load_csv` | `Dataset` |
 | Validation | `validate_dataset` | `ValidationConfig`, `ValidationReport`, `ValidationIssue`, `ValidationCode` |
 | Duplicates | `detect_duplicates` | `DuplicateReport` |
+| Outliers | `detect_outliers` | `OutlierReport`, `ColumnOutlierReport`, `OutlierEvidence` |
+| Constant features | `detect_constant_features` | `ConstantFeatureReport`, `ConstantColumnStats` |
+| Class imbalance | `analyze_class_imbalance` | `ClassImbalanceReport`, `ClassCount` |
 | Missing values | `missing_value_report` | `MissingValueReport`, `ColumnMissingStats` |
 | Numeric statistics | `numeric_statistics` | `NumericStatistics`, `NumericColumnStatistics` |
 | Combined profile | `profile_dataset` | `DatasetProfile`, `ColumnProfile` |
@@ -215,6 +298,12 @@ read-only.
   `keep_default_na=False` is passed to the loader.
 - Duplicate rows use pandas equality semantics, including equal missing-value
   patterns.
+- Outlier detection is univariate and numeric-only. Infinite values are flagged
+  as outliers and excluded from the finite baseline used to calculate bounds.
+- Constant-feature and class-imbalance analyses use non-missing observations for
+  their fractions and percentages; missing values are reported separately.
+- Detection thresholds are configurable heuristics, not automatic repair
+  decisions. Reports identify values and rows but never modify the dataset.
 - The loader does not validate automatically. This allows structurally
   imperfect datasets to be loaded and audited before a fail-fast decision.
 
@@ -224,7 +313,7 @@ read-only.
 src/data_mendrix/
 ├── core/            Dataset container, CSV loader, exception hierarchy
 ├── validation/      Structural validation and issue reporting
-├── detection/       Duplicate-row detection
+├── detection/       Duplicate, outlier, constant and imbalance detection
 ├── profiling/       Missing-value, numeric and combined profiling
 ├── repair/          Reserved for the future repair engine (not implemented)
 ├── reporting/       Reserved for future report formats (not implemented)
@@ -250,8 +339,14 @@ The current release is intentionally narrow:
 - Only CSV paths and text streams are supported; the path must end in `.csv`.
 - Files are loaded into memory with pandas; there is no out-of-core processing.
 - The repair/reporting engine, HTTP API and frontend are not implemented.
-- Validation is structural only; it does not check data types, outliers,
-  semantic rules or target leakage.
+- Validation is structural only; it does not enforce data types, semantic rules
+  or target leakage. Statistical checks are separate read-only detection APIs.
+- Outlier detection is univariate and numeric-only. It does not detect
+  multivariate, contextual or time-series anomalies.
+- Outlier thresholds are statistical heuristics. Flagged values are candidates
+  for review, not automatically invalid data.
+- Constant and class-imbalance thresholds are caller-configured heuristics.
+  Missing target values are excluded from class percentages.
 - Numeric statistics exclude booleans, complex values and non-numeric object
   dtypes such as `Decimal`, datetimes and timedeltas.
 - Report column labels are stringified, so labels such as `0` and `"0"` cannot
@@ -262,8 +357,9 @@ The current release is intentionally narrow:
   copies; CSV-loaded scalar data is unaffected.
 - CI is configured for Python 3.11 and 3.12 only.
 
-See [docs/known-limitations.md](docs/known-limitations.md) for details and
-workarounds.
+See [docs/detection.md](docs/detection.md) for detection method definitions and
+[docs/known-limitations.md](docs/known-limitations.md) for detailed limitations
+and workarounds.
 
 ## Development
 
