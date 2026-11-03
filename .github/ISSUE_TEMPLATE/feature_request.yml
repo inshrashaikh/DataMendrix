@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest an improvement for DataMendrix.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please explain the problem first,
+        then the proposed API or behaviour. This helps keep the project focused.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow is difficult or impossible today?
+      placeholder: Describe the dataset, the audit task and the current workaround.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful API, output or behaviour change.
+      placeholder: |
+        A possible API shape or workflow, with a short example if helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What alternatives or workarounds have you tried?
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and impact
+      description: Does this fit the current Python foundation, or does it introduce a new subsystem?
+      placeholder: Consider validation, profiling, detection, repair, reporting or integrations.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add links, examples, screenshots or prior art here.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and pull requests for a similar request.
+          required: true
+        - label: This request is related to dataset auditing, cleaning or ML-readiness.
+          required: true

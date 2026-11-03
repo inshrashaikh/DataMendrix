@@ -1,0 +1,101 @@
+name: Bug report
+description: Report a reproducible defect in DataMendrix.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please provide enough detail
+        to reproduce the problem without sharing secrets or sensitive data.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, and what did you expect instead?
+      placeholder: A concise description of the problem and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include a small, self-contained script and sample data if possible.
+      render: python
+      placeholder: |
+        from data_mendrix import Dataset, profile_dataset
+
+        # Minimal code that demonstrates the problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect DataMendrix to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Error output
+      description: Paste the full traceback or error message, if available.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: DataMendrix version
+      description: Run `python -c "import data_mendrix; print(data_mendrix.__version__)"`.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: 3.11.9
+    validations:
+      required: true
+
+  - type: input
+    id: dependency-versions
+    attributes:
+      label: pandas and NumPy versions
+      placeholder: pandas 3.1.0, NumPy 2.4.6
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, Windows 11, macOS 15
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and pull requests for the same problem.
+          required: true
+        - label: I can reproduce the problem with the versions reported above.
+          required: true
+        - label: I removed secrets and sensitive data from this report.
+          required: true
