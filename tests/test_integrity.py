@@ -26,6 +26,17 @@ ANALYSES = [
         id="analyze_class_imbalance",
     ),
     pytest.param(dm.profile_dataset, id="profile_dataset"),
+    pytest.param(
+        lambda dataset: dm.preview_repair(
+            dataset,
+            [dm.FillMissing(columns="a", strategy="mean")],
+        ),
+        id="preview_repair",
+    ),
+    pytest.param(
+        lambda dataset: dm.apply_repair(dataset, [dm.RemoveDuplicates()]),
+        id="apply_repair",
+    ),
 ]
 
 
@@ -61,6 +72,10 @@ def test_public_reports_are_frozen() -> None:
     constants = dm.detect_constant_features(dataset)
     imbalance = dm.analyze_class_imbalance(dataset, target="b")
     outliers = dm.detect_outliers(dm.Dataset(pd.DataFrame({"a": [1.0, 2.0, 3.0, 4.0, 5.0, 100.0]})))
+    repair = dm.fill_missing(dataset, columns="a", strategy="constant", value=0)
+    repair_report = repair.report
+    repair_operation = repair_report.operations[0]
+    repair_change = repair_operation.column_changes[0]
 
     targets: list[tuple[object, str]] = [
         (dm.ValidationIssue(dm.ValidationCode.TOO_FEW_ROWS, "message"), "message"),
@@ -78,6 +93,13 @@ def test_public_reports_are_frozen() -> None:
         (constants.column("a"), "unique_count"),
         (imbalance, "row_count"),
         (imbalance.classes[0], "count"),
+        (repair, "report"),
+        (repair_report, "dataset_name"),
+        (repair_operation, "action"),
+        (repair_change, "column"),
+        (dm.RepairIssue("a", "message"), "message"),
+        (dm.FillMissing(columns=["a"], strategy="mean"), "strategy"),
+        (dm.ConvertTypes(conversions={"a": "float64"}), "errors"),
     ]
 
     for target, field in targets:
@@ -91,6 +113,7 @@ def test_report_collections_are_tuples() -> None:
     outliers = dm.detect_outliers(dataset)
     constants = dm.detect_constant_features(dataset)
     imbalance = dm.analyze_class_imbalance(dataset, target="b")
+    repair = dm.fill_missing(dataset, columns="a", strategy="constant", value=0)
 
     assert isinstance(profile.columns, tuple)
     assert isinstance(profile.numeric.columns, tuple)
@@ -102,3 +125,9 @@ def test_report_collections_are_tuples() -> None:
     assert isinstance(outliers.outlier_indices, tuple)
     assert isinstance(constants.columns, tuple)
     assert isinstance(imbalance.classes, tuple)
+    assert isinstance(repair.report.operations, tuple)
+    assert isinstance(repair.report.operations[0].column_changes, tuple)
+    assert isinstance(repair.report.operations[0].issues, tuple)
+    assert isinstance(repair.report.affected_rows, tuple)
+    assert isinstance(repair.report.affected_columns, tuple)
+    assert dm.FillMissing(columns=["a", "b"]).columns == ("a", "b")

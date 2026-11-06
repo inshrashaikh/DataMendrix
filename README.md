@@ -3,12 +3,13 @@
 DataMendrix is an open-source Python toolkit for auditing, cleaning and preparing
 tabular datasets for machine learning.
 
-> **Status:** early-stage (`0.2.x`). This repository contains the Python
-> foundation and detection engine: CSV loading, structural validation,
-> missing-value statistics, duplicate-row detection, numeric descriptive
-> statistics, combined profiling, univariate outlier detection, constant-feature
-> detection and class-imbalance analysis. The repair engine, reporting formats,
-> HTTP API and frontend are not implemented yet.
+> **Status:** early-stage (`0.3.x`). This repository contains the Python
+> foundation, detection engine and cleaning/repair engine: CSV loading, structural
+> validation, missing-value statistics, duplicate-row detection, numeric
+> descriptive statistics, combined profiling, univariate outlier detection,
+> constant-feature detection, class-imbalance analysis, and previewable
+> missing-value, duplicate-row and data-type repairs. Reporting formats, the HTTP
+> API and frontend are not implemented yet.
 
 ## Features
 
@@ -26,6 +27,9 @@ tabular datasets for machine learning.
   threshold.
 - Binary and multiclass target-imbalance analysis with counts, percentages and
   configurable ratio/minority thresholds.
+- Explicit repair plans for missing values, duplicate rows and data types.
+- Repair previews, immutable change reports, affected rows/columns and safe
+  conversion-error policies.
 - Typed public API, pytest suite and `pyproject.toml`-based packaging.
 - CI configured for Python 3.11 and 3.12.
 
@@ -73,8 +77,12 @@ python -m pip install .
 
 ```python
 from data_mendrix import (
+    FillMissing,
+    RemoveDuplicates,
+    apply_repair,
     detect_outliers,
     load_csv,
+    preview_repair,
     profile_dataset,
     validate_dataset,
 )
@@ -95,6 +103,17 @@ print(profile.numeric.column_names)
 outliers = detect_outliers(dataset)
 for column in outliers.columns_with_outliers:
     print(column.column, column.outlier_indices)
+
+plan = [
+    FillMissing(columns=["age"], strategy="median"),
+    RemoveDuplicates(subset=["customer_id"]),
+]
+preview = preview_repair(dataset, plan)
+print(preview.change_count, preview.affected_rows)
+
+result = apply_repair(dataset, plan)
+cleaned = result.dataset
+print(cleaned.shape, result.report.issues)
 ```
 
 ## API examples
@@ -173,6 +192,56 @@ print(key_duplicates.duplicate_indices)
 ```
 
 Duplicate detection only reports rows; it never removes them.
+
+### Preview and apply repairs
+
+Repairs are expressed as an explicit, ordered plan. Previewing a plan runs it on
+an internal copy and returns the same immutable report that applying it will
+return. `apply_repair` also returns a new `Dataset`; the input dataset is never
+modified.
+
+```python
+from data_mendrix import (
+    ConvertTypes,
+    DropMissing,
+    FillMissing,
+    RemoveDuplicates,
+    apply_repair,
+    preview_repair,
+)
+
+plan = [
+    DropMissing(axis="rows", columns=["customer_id"], how="any"),
+    FillMissing(columns=["age", "income"], strategy="median"),
+    FillMissing(columns=["segment"], strategy="mode"),
+    RemoveDuplicates(subset=["customer_id"], keep="first"),
+    ConvertTypes(conversions={"age": "Int64"}, errors="coerce"),
+]
+
+preview = preview_repair(dataset, plan)
+print(preview.row_count_before, preview.row_count_after)
+print(preview.affected_rows, preview.affected_columns)
+for operation in preview.operations:
+    print(operation.action, operation.change_count, operation.issues)
+
+result = apply_repair(dataset, plan)
+cleaned = result.dataset
+report = result.report
+```
+
+Operation classes validate their arguments when constructed:
+
+| Operation | Purpose |
+|---|---|
+| `DropMissing` | Drop rows or columns using `any`/`all` missingness and an optional column scope |
+| `FillMissing` | Fill with `mean`, `median`, `mode` or an explicit constant |
+| `RemoveDuplicates` | Remove full-row or subset duplicates with `first`, `last` or `False` |
+| `ConvertTypes` | Convert selected columns to pandas-compatible dtypes |
+
+For single repairs, `drop_missing`, `fill_missing`, `remove_duplicates` and
+`convert_dtypes` are convenience wrappers that return `RepairResult`. See
+[docs/repair.md](docs/repair.md) for strategy defaults, error policies and report
+semantics.
 
 ### Detect numeric outliers
 
@@ -282,17 +351,27 @@ print(profile_dataset(dataset).missing.missing_cell_count)
 | Missing values | `missing_value_report` | `MissingValueReport`, `ColumnMissingStats` |
 | Numeric statistics | `numeric_statistics` | `NumericStatistics`, `NumericColumnStatistics` |
 | Combined profile | `profile_dataset` | `DatasetProfile`, `ColumnProfile` |
+| Repair plan | `preview_repair`, `apply_repair` | `RepairReport`, `RepairOperationReport`, `RepairResult` |
+| Missing-value repair | `drop_missing`, `fill_missing` | `RepairResult`, `ColumnChange`, `RepairIssue` |
+| Duplicate repair | `remove_duplicates` | `RepairResult` |
+| Data-type repair | `convert_dtypes` | `RepairResult`, `RepairConversionError` |
 | Errors | `DataMendrixError` and subclasses | Typed library exceptions |
 
-All report objects are frozen dataclasses, and all analysis functions are
-read-only.
+All report and operation objects are frozen dataclasses, and all analysis
+functions are read-only. Repair functions never modify their input dataset; they
+return a new dataset plus an immutable report.
 
 ## Data safety and semantics
 
 - `Dataset` takes a defensive copy on construction.
 - `Dataset.frame` returns another copy, so callers cannot mutate the internal
   frame through the public API.
-- Analysis functions never modify the dataset.
+- Analysis and preview functions never modify the dataset.
+- Repair operations run on a defensive copy. `apply_repair` returns a new
+  `Dataset` and a `RepairReport`; the original dataset remains unchanged.
+- Repair plans are explicit and ordered. There are no implicit or automatic
+  repairs, and every operation reports affected rows, affected columns and
+  change counts.
 - Missing values follow pandas semantics: `NaN`, `None`, `pandas.NA` and `NaT`.
   CSV fields matching pandas' default NA tokens are missing unless
   `keep_default_na=False` is passed to the loader.
@@ -304,6 +383,13 @@ read-only.
   their fractions and percentages; missing values are reported separately.
 - Detection thresholds are configurable heuristics, not automatic repair
   decisions. Reports identify values and rows but never modify the dataset.
+- `mean`/`median` fills use finite, non-missing values and default to numeric
+  columns. `mode` uses the first non-missing value in a tie. Fills with no usable
+  baseline are reported as issues and leave the column unchanged.
+- Conversion errors follow an explicit policy: `raise` (typed
+  `RepairConversionError`), `skip` (record an issue and leave the column
+  unchanged) or `coerce` (replace invalid values with missing where the target
+  dtype supports missing values).
 - The loader does not validate automatically. This allows structurally
   imperfect datasets to be loaded and audited before a fail-fast decision.
 
@@ -315,7 +401,7 @@ src/data_mendrix/
 ├── validation/      Structural validation and issue reporting
 ├── detection/       Duplicate, outlier, constant and imbalance detection
 ├── profiling/       Missing-value, numeric and combined profiling
-├── repair/          Reserved for the future repair engine (not implemented)
+├── repair/          Missing-value, duplicate and dtype repair
 ├── reporting/       Reserved for future report formats (not implemented)
 └── experimentation/ Reserved for future experiments (not implemented)
 ```
@@ -325,12 +411,13 @@ Dependency direction is deliberately one-way:
 ```text
 profiling ──> detection ──> core
 profiling ──> core
+repair ──> core
 validation ──> core
 ```
 
-`core` contains no data-quality logic. Public exports are assembled in
-`src/data_mendrix/__init__.py`. Reports are immutable snapshots rather than
-mutable analysis state.
+`core` contains shared container, loading, exception and column-selection logic.
+Public exports are assembled in `src/data_mendrix/__init__.py`. Reports and
+operations are immutable snapshots rather than mutable analysis state.
 
 ## Known limitations
 
@@ -338,9 +425,20 @@ The current release is intentionally narrow:
 
 - Only CSV paths and text streams are supported; the path must end in `.csv`.
 - Files are loaded into memory with pandas; there is no out-of-core processing.
-- The repair/reporting engine, HTTP API and frontend are not implemented.
+- Reporting formats, the HTTP API and frontend are not implemented.
 - Validation is structural only; it does not enforce data types, semantic rules
   or target leakage. Statistical checks are separate read-only detection APIs.
+- Repairs are explicit, in-memory transformations. There is no automatic repair
+  recommendation, custom row-wise callback, rollback log or saved repair plan.
+- Dtype repair delegates parsing to pandas. Numeric, datetime and timedelta
+  coercion use pandas conversion rules, and conversions that would turn existing
+  missing values into data are rejected. Duplicate labels in a selection are
+  considered only once.
+- With no considered columns (a zero-column dataset), `axis="rows"` with
+  `how="all"` drops every row, matching `pandas.dropna`'s vacuous-truth
+  semantics; `how="any"` drops nothing.
+- Repair reports describe what a plan did; they do not prove that the repaired
+  dataset is semantically correct for a downstream model.
 - Outlier detection is univariate and numeric-only. It does not detect
   multivariate, contextual or time-series anomalies.
 - Outlier thresholds are statistical heuristics. Flagged values are candidates
@@ -357,7 +455,8 @@ The current release is intentionally narrow:
   copies; CSV-loaded scalar data is unaffected.
 - CI is configured for Python 3.11 and 3.12 only.
 
-See [docs/detection.md](docs/detection.md) for detection method definitions and
+See [docs/detection.md](docs/detection.md) for detection method definitions,
+[docs/repair.md](docs/repair.md) for repair semantics and
 [docs/known-limitations.md](docs/known-limitations.md) for detailed limitations
 and workarounds.
 

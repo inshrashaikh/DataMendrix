@@ -10,12 +10,14 @@ from data_mendrix import (
     DatasetValidationError,
     InvalidDatasetError,
     InvalidParameterError,
+    RepairConversionError,
+    RepairError,
     UnsupportedFileTypeError,
 )
 
 
 def test_version_is_exposed() -> None:
-    assert data_mendrix.__version__ == "0.2.0"
+    assert data_mendrix.__version__ == "0.3.0"
 
 
 def test_all_exported_names_exist() -> None:
@@ -42,6 +44,37 @@ def test_detection_engine_names_are_exported() -> None:
     assert expected <= set(data_mendrix.__all__)
 
 
+def test_repair_engine_names_are_exported() -> None:
+    expected = {
+        "ColumnChange",
+        "ConversionErrorPolicy",
+        "ConvertTypes",
+        "DropAxis",
+        "DropHow",
+        "DropMissing",
+        "FillMissing",
+        "FillStrategy",
+        "RepairAction",
+        "RepairConversionError",
+        "RepairError",
+        "RepairIssue",
+        "RepairKeepPolicy",
+        "RepairOperation",
+        "RepairOperationReport",
+        "RepairReport",
+        "RepairResult",
+        "RemoveDuplicates",
+        "apply_repair",
+        "convert_dtypes",
+        "drop_missing",
+        "fill_missing",
+        "preview_repair",
+        "remove_duplicates",
+    }
+
+    assert expected <= set(data_mendrix.__all__)
+
+
 def test_exception_hierarchy() -> None:
     for exception in (
         DatasetLoadError,
@@ -49,6 +82,8 @@ def test_exception_hierarchy() -> None:
         InvalidDatasetError,
         InvalidParameterError,
         ColumnNotFoundError,
+        RepairError,
+        RepairConversionError,
     ):
         assert issubclass(exception, DataMendrixError)
 
@@ -56,3 +91,5 @@ def test_exception_hierarchy() -> None:
     assert issubclass(InvalidParameterError, ValueError)
     assert issubclass(InvalidDatasetError, ValueError)
     assert issubclass(ColumnNotFoundError, KeyError)
+    assert issubclass(RepairConversionError, RepairError)
+    assert issubclass(RepairConversionError, ValueError)

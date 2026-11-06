@@ -1,8 +1,10 @@
 # Detection engine
 
-The `0.2.x` detection engine adds read-only checks for numeric outliers, constant
-or near-constant features, and target-class imbalance. Every function returns an
-immutable report and never removes, replaces or repairs values.
+The detection engine introduced in `0.2.x` adds read-only checks for numeric
+outliers, constant or near-constant features, and target-class imbalance. Every
+function returns an immutable report and never removes, replaces or repairs
+values. Explicit cleaning is provided separately by the
+[repair engine](repair.md).
 
 ```python
 from data_mendrix import (
@@ -199,5 +201,6 @@ rebalanced. Use the reports as evidence for review and keep domain requirements
 and downstream model behaviour in mind.
 
 Reports and analysis are read-only. Removing outliers, dropping constant
-features, resampling classes and generating a repaired dataset are outside the
-current detection engine.
+features and resampling classes are outside the detection engine. Missing-value,
+duplicate and dtype cleaning is handled by the separate
+[repair engine](repair.md).

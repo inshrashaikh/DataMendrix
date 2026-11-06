@@ -74,3 +74,21 @@ class ColumnNotFoundError(DataMendrixError, KeyError):
 
 class InvalidParameterError(DataMendrixError, ValueError):
     """Raised when a public function or option receives an invalid parameter."""
+
+
+class RepairError(DataMendrixError):
+    """Base class for repair operations that cannot be completed."""
+
+
+class RepairConversionError(RepairError, ValueError):
+    """Raised when a requested dtype conversion fails.
+
+    The offending column label and target dtype are available through
+    :attr:`column` and :attr:`target`. The original pandas exception, if any, is
+    chained as the cause.
+    """
+
+    def __init__(self, message: str, *, column: Hashable, target: object) -> None:
+        super().__init__(message)
+        self.column: str = str(column)
+        self.target: str = str(target)

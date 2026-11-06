@@ -8,6 +8,8 @@ from data_mendrix.core.exceptions import (
     DatasetValidationError,
     InvalidDatasetError,
     InvalidParameterError,
+    RepairConversionError,
+    RepairError,
     UnsupportedFileTypeError,
 )
 from data_mendrix.core.loader import CsvSource, load_csv
@@ -21,6 +23,8 @@ __all__ = [
     "DatasetValidationError",
     "InvalidDatasetError",
     "InvalidParameterError",
+    "RepairConversionError",
+    "RepairError",
     "UnsupportedFileTypeError",
     "load_csv",
 ]

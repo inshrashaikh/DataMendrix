@@ -3,8 +3,10 @@
 The foundation covers CSV loading, structural validation, missing-value
 statistics, duplicate-row detection, numeric descriptive statistics and combined
 profiling. The detection engine adds univariate outlier detection, constant
-feature detection and class-imbalance analysis. Repair, reporting, the HTTP API
-and the frontend are intentionally out of scope for this release.
+feature detection and class-imbalance analysis. The repair engine adds explicit
+missing-value, duplicate and dtype repairs with previews and immutable reports.
+Reporting formats, the HTTP API and the frontend are intentionally out of scope
+for this release.
 """
 
 from data_mendrix.core import (
@@ -16,6 +18,8 @@ from data_mendrix.core import (
     DatasetValidationError,
     InvalidDatasetError,
     InvalidParameterError,
+    RepairConversionError,
+    RepairError,
     UnsupportedFileTypeError,
     load_csv,
 )
@@ -47,6 +51,30 @@ from data_mendrix.profiling import (
     numeric_statistics,
     profile_dataset,
 )
+from data_mendrix.repair import (
+    ColumnChange,
+    ConversionErrorPolicy,
+    ConvertTypes,
+    DropAxis,
+    DropHow,
+    DropMissing,
+    FillMissing,
+    FillStrategy,
+    RemoveDuplicates,
+    RepairAction,
+    RepairIssue,
+    RepairKeepPolicy,
+    RepairOperation,
+    RepairOperationReport,
+    RepairReport,
+    RepairResult,
+    apply_repair,
+    convert_dtypes,
+    drop_missing,
+    fill_missing,
+    preview_repair,
+    remove_duplicates,
+)
 from data_mendrix.validation import (
     ValidationCode,
     ValidationConfig,
@@ -55,24 +83,32 @@ from data_mendrix.validation import (
     validate_dataset,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "ClassCount",
     "ClassImbalanceReport",
+    "ColumnChange",
     "ColumnMissingStats",
     "ColumnNotFoundError",
     "ColumnOutlierReport",
     "ColumnProfile",
     "ConstantColumnStats",
     "ConstantFeatureReport",
+    "ConversionErrorPolicy",
+    "ConvertTypes",
     "CsvSource",
     "DataMendrixError",
     "Dataset",
     "DatasetLoadError",
     "DatasetProfile",
     "DatasetValidationError",
+    "DropAxis",
+    "DropHow",
+    "DropMissing",
     "DuplicateReport",
+    "FillMissing",
+    "FillStrategy",
     "InvalidDatasetError",
     "InvalidParameterError",
     "KeepPolicy",
@@ -83,6 +119,16 @@ __all__ = [
     "OutlierEvidence",
     "OutlierMethod",
     "OutlierReport",
+    "RemoveDuplicates",
+    "RepairAction",
+    "RepairConversionError",
+    "RepairError",
+    "RepairIssue",
+    "RepairKeepPolicy",
+    "RepairOperation",
+    "RepairOperationReport",
+    "RepairReport",
+    "RepairResult",
     "UnsupportedFileTypeError",
     "ValidationCode",
     "ValidationConfig",
@@ -90,12 +136,18 @@ __all__ = [
     "ValidationReport",
     "__version__",
     "analyze_class_imbalance",
+    "apply_repair",
+    "convert_dtypes",
     "detect_constant_features",
     "detect_duplicates",
     "detect_outliers",
+    "drop_missing",
+    "fill_missing",
     "load_csv",
     "missing_value_report",
     "numeric_statistics",
+    "preview_repair",
     "profile_dataset",
+    "remove_duplicates",
     "validate_dataset",
 ]

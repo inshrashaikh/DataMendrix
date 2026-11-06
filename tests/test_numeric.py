@@ -135,6 +135,22 @@ def test_numeric_statistics_reject_wrong_dataset_type() -> None:
         numeric_statistics(cast(Any, pd.DataFrame({"a": [1]})))
 
 
+def test_statistics_equality_treats_nan_as_equal() -> None:
+    left = numeric_statistics(Dataset(pd.DataFrame({"x": [1.0, 2.0]})))
+    right = numeric_statistics(Dataset(pd.DataFrame({"x": [1.0, 2.0]})))
+
+    assert left == right
+    assert hash(left.column("x")) == hash(right.column("x"))
+
+
+def test_statistics_equality_detects_real_differences() -> None:
+    left = numeric_statistics(Dataset(pd.DataFrame({"x": [1.0, 2.0]})))
+    right = numeric_statistics(Dataset(pd.DataFrame({"x": [1.0, 3.0]})))
+
+    assert left != right
+    assert left.column("x") != right.column("x")
+
+
 def test_unknown_numeric_column_raises() -> None:
     stats = numeric_statistics(Dataset(pd.DataFrame({"a": [1]})))
 

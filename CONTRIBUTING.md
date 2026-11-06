@@ -69,16 +69,20 @@ with at least one supported Python version before opening a pull request.
 - Use type hints for public and internal functions and methods.
 - Add docstrings for public APIs and non-obvious internal helpers.
 - Preserve the one-way dependency direction:
-  `profiling -> detection -> core`, `profiling -> core`, `validation -> core`.
-- Do not make analysis functions mutate a `Dataset` or a caller-owned DataFrame.
-- Keep report objects frozen and their collection fields immutable, normally
-  tuples.
+  `profiling -> detection -> core`, `profiling -> core`, `repair -> core`,
+  `validation -> core`.
+- Do not make analysis or preview functions mutate a `Dataset` or a caller-owned
+  DataFrame. Repair functions must return a new dataset and an immutable report.
+- Keep report and operation objects frozen and their collection fields immutable,
+  normally tuples.
 - Avoid new runtime dependencies unless there is a clear need and the change has
   been discussed first.
 - Keep public errors under `DataMendrixError` and update the exported API when a
   new public type or function is introduced.
-- Do not implement the repair engine, HTTP API or frontend as part of an
+- Do not implement reporting formats, the HTTP API or frontend as part of an
   unrelated change.
+- Document repair semantics and edge cases in `docs/repair.md` when cleaning
+  behaviour changes.
 
 ## Tests
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Hashable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import cast
 
 import numpy as np
@@ -21,7 +21,7 @@ from data_mendrix.core.dataset import Dataset
 from data_mendrix.core.exceptions import ColumnNotFoundError, InvalidDatasetError
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class NumericColumnStatistics:
     """Descriptive statistics for one numeric column.
 
@@ -30,6 +30,10 @@ class NumericColumnStatistics:
     particular, ``std`` needs two values, ``skewness`` needs three, and
     ``kurtosis`` needs four. Quartiles use pandas' default linear interpolation;
     skewness and excess (Fisher) kurtosis follow pandas' definitions.
+
+    Equality treats ``nan`` in the same field on both sides as equal, so two
+    reports built from identical data compare equal even when a statistic is
+    undefined. All other fields compare with the usual ``==`` semantics.
     """
 
     column: str
@@ -46,6 +50,40 @@ class NumericColumnStatistics:
     iqr: float
     skewness: float
     kurtosis: float
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not NumericColumnStatistics:
+            return NotImplemented
+        return all(
+            _nan_aware_equal(getattr(self, field.name), getattr(other, field.name))
+            for field in fields(self)
+        )
+
+    def __hash__(self) -> int:
+        values = tuple(_hashable_nan(getattr(self, field.name)) for field in fields(self))
+        return hash(values)
+
+
+_NAN_HASH_SENTINEL = ("<nan>",)
+
+
+def _nan_aware_equal(left: object, right: object) -> bool:
+    """Compare two field values, treating paired ``nan`` floats as equal."""
+    if (
+        isinstance(left, float)
+        and isinstance(right, float)
+        and math.isnan(left)
+        and math.isnan(right)
+    ):
+        return True
+    return bool(left == right)
+
+
+def _hashable_nan(value: object) -> object:
+    """Canonicalise ``nan`` so equal statistics hash equally."""
+    if isinstance(value, float) and math.isnan(value):
+        return _NAN_HASH_SENTINEL
+    return value
 
 
 @dataclass(frozen=True, slots=True)

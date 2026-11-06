@@ -1,16 +1,18 @@
 # Known limitations
 
 This document describes intentional boundaries of the current DataMendrix
-foundation and detection engine (`0.2.x`). They are not promises that the
-software will remain limited in these ways; they clarify what is and is not
-validated today.
+foundation, detection engine and repair engine (`0.3.x`). They are not promises
+that the software will remain limited in these ways; they clarify what is and is
+not validated today.
 
 ## Scope and maturity
 
-- DataMendrix is in an early alpha stage. The current release focuses on
-  inspecting datasets, not repairing them.
-- The repair engine, reporting formats, HTTP API, frontend and experiment
-  tracking are not implemented.
+- DataMendrix is in an early alpha stage. The current release covers inspection
+  and explicit, in-memory cleaning of tabular datasets.
+- Reporting formats, the HTTP API, frontend and experiment tracking are not
+  implemented.
+- Repairs are caller-specified operations rather than automatic recommendations.
+  The library does not infer a cleaning policy from the data.
 - The public API may evolve before a stable `1.0` release. Breaking changes
   should be documented in the pull request and release notes.
 
@@ -45,6 +47,46 @@ validated today.
 - Duplicate reports identify row labels, not positions. With a non-unique index,
   the same label can appear more than once in `duplicate_indices`.
 - Duplicate detection reports rows but does not drop, merge or repair them.
+  Explicit removal is available through `RemoveDuplicates` or
+  `remove_duplicates`.
+
+## Repair engine
+
+- Repairs are explicit transformations. The library does not suggest which
+  missing values, duplicates or data types to repair.
+- A repair plan is applied in memory to a defensive copy. There is no streaming,
+  chunked, out-of-core or transactional repair mode.
+- Operations support pandas-compatible dtype targets, but there is no
+  user-supplied per-value conversion callback or schema language.
+- `mean` and `median` fills use finite non-missing values only and are computed
+  in `float64`. Integers beyond `2**53` may lose precision in the fill value.
+  If no finite baseline exists, the column is left unchanged and a `RepairIssue`
+  is recorded.
+- `mode` falls back to first-appearance order for ties and cannot fill a column
+  whose values are all missing or whose most frequent value is incompatible with
+  `fillna`.
+- `constant` fills require a non-missing scalar. A fill that is incompatible with
+  the column dtype is recorded as an issue rather than silently discarded.
+- `coerce` conversion can only introduce missing values when the target dtype
+  supports them. Exact integer and NumPy boolean targets may therefore raise
+  `RepairConversionError` instead of producing missing values.
+- Conversions that would turn existing missing values into non-missing data are
+  rejected. Dtype repair delegates parsing semantics to pandas; it does not
+  implement a separate CSV or date parser.
+- Repair reports describe the plan that ran. They do not prove that the resulting
+  dataset is semantically valid, unbiased or suitable for a particular model.
+- Duplicate labels in a selection are considered only once. With no considered
+  columns (a zero-column dataset), `axis="rows", how="all"` drops every row,
+  matching `pandas.dropna`'s vacuous-truth semantics; `how="any"` drops
+  nothing. Report row-label unions de-duplicate in plan order and treat all
+  missing row labels as one; unhashable labels (e.g. lists in an object index)
+  are compared pairwise.
+- Timezone-aware datetime targets are coerced by localising timezone-naive
+  results to the target timezone or converting timezone-aware results to it.
+- There is no persisted repair history, undo log or rollback mechanism. Callers
+  should retain the original dataset when they need to compare or revert.
+- Repair does not implicitly validate its output. Run `validate_dataset`,
+  detection APIs and task-specific checks after cleaning as needed.
 
 ## Structural validation
 
@@ -120,24 +162,26 @@ validated today.
   equal to the ratio threshold and a minority fraction equal to the fraction
   threshold do not trigger detection.
 - The detection engine does not drop constant features, remove outliers,
-  resample classes, create train/test splits or generate repaired datasets.
+  resample classes or create train/test splits. Detection remains read-only;
+  explicit cleaning is handled by the separate repair engine.
 
 ## Dataset isolation
 
 - `Dataset` takes a pandas deep copy on construction, and `Dataset.frame`
-  returns another deep copy.
+  returns another deep copy. Repaired datasets follow the same rule.
 - pandas deep copies do not recursively copy mutable Python objects stored in
   object-typed cells. Lists, dictionaries and similar objects can therefore be
-  shared between the original frame and a copy.
+  shared between the original frame and a copy, including the dataset returned
+  by a repair.
 - CSV-loaded datasets contain scalar values, so this caveat normally does not
   apply to data read through `load_csv`.
 
 ## Environment and compatibility
 
 - The package requires Python 3.11 or newer.
-- Continuous integration is configured for Python 3.11 and 3.12. Other versions
-  are not part of the current CI matrix even when they satisfy the package
-  metadata.
+- The test suite passes on Python 3.11, 3.12, 3.13 and 3.14 against both
+  pandas 2.3.x and pandas 3.x. Continuous integration is configured for Python
+  3.11 and 3.12 only, without a dependency-version matrix.
 - Supported pandas and NumPy versions follow the lower bounds in
   `pyproject.toml`. Behaviour may vary with substantially newer library
   releases, and CI does not currently run a full dependency-version matrix.
